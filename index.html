@@ -522,6 +522,45 @@
             }
         }
 
+        // Versión simplificada sin desviación estándar
+function processWithTensorFlow(data) {
+    try {
+        // Convertir datos a tensores
+        const numericData = data.map(row => {
+            return Object.values(row).filter(val => typeof val === 'number');
+        }).filter(arr => arr.length > 0);
+        
+        if (numericData.length === 0) {
+            throw new Error('No se encontraron datos numéricos en el CSV');
+        }
+        
+        tensorData = tf.tensor2d(numericData);
+        
+        // Operaciones básicas (sin desviación estándar)
+        const mean = tensorData.mean();
+        const max = tensorData.max();
+        const min = tensorData.min();
+        
+        const output = `
+            <h3>Análisis con TensorFlow.js</h3>
+            <p><strong>Forma de los datos:</strong> ${tensorData.shape}</p>
+            <p><strong>Valor medio:</strong> ${mean.dataSync()[0].toFixed(4)}</p>
+            <p><strong>Valor máximo:</strong> ${max.dataSync()[0].toFixed(4)}</p>
+            <p><strong>Valor mínimo:</strong> ${min.dataSync()[0].toFixed(4)}</p>
+            <p>Procesamiento completado exitosamente.</p>
+        `;
+        
+        document.getElementById('output').innerHTML = output;
+        
+    } catch (error) {
+        document.getElementById('output').innerHTML = `
+            <p style="color: #cb2431;"><strong>Error:</strong> ${error.message}</p>
+            <p>Asegúrate de que el CSV contiene datos numéricos.</p>
+        `;
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Aplicación de procesamiento CSV inicializada');
