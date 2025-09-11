@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resultados - Detección de Fraudes con CNN 1D</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -290,7 +291,7 @@
             
             // Procesar resultados
             predictions = [];
-            let fraudCount = 0;
+            let fraudCountValue = 0;
             let correctPredictions = 0;
             
             for (let i = 0; i < trainingData.originalData.length; i++) {
@@ -300,11 +301,11 @@
                 const actualLabel = row.Type === 'Bot' ? 1 : 0;
                 const isCorrect = (isFraud && actualLabel === 1) || (!isFraud && actualLabel === 0);
                 
-                if (isFraud) fraudCount++;
+                if (isFraud) fraudCountValue++;
                 if (isCorrect) correctPredictions++;
                 
                 predictions.push({
-                    actor: row.Actor,
+                    actor: row.Actor || `Registro ${i+1}`,
                     probability: prediction,
                     isFraud: isFraud,
                     actualType: row.Type,
@@ -315,7 +316,7 @@
             
             // Actualizar estadísticas
             totalCount.textContent = predictions.length;
-            fraudCount.textContent = fraudCount;
+            fraudCount.textContent = fraudCountValue;
             accuracyElem.textContent = `${(correctPredictions / predictions.length * 100).toFixed(1)}%`;
             
             // Mostrar resultados
@@ -400,37 +401,4 @@
                 if (typeFilter === 'legit' && pred.isFraud) return false;
                 
                 // Filtrar por probabilidad mínima
-                if (pred.probability < minProb) return false;
-                
-                return true;
-            });
-            
-            displayResults();
-        }
-        
-        function downloadCSVReport() {
-            // Crear contenido CSV
-            let csvContent = "Actor,Probabilidad de Fraude,Resultado,Etiqueta Real,Correcto\n";
-            
-            predictions.forEach(pred => {
-                csvContent += `${pred.actor},${(pred.probability * 100).toFixed(2)}%,${pred.isFraud ? 'Fraude' : 'Legítimo'},${pred.actualType || 'Desconocido'},${pred.isCorrect ? 'Sí' : 'No'}\n`;
-            });
-            
-            // Crear blob y descargar
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            
-            link.setAttribute("href", url);
-            link.setAttribute("download", "reporte_deteccion_fraudes.csv");
-            link.style.visibility = 'hidden';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-        
-        function downloadPDFSummary() {
-            // En una implementación real, aquí se generaría un PDF con una librería como jsPDF
-            // Por ahora, mostraremos un mensaje
-            alert("En una implementación completa, aquí se generaría y
+                if (pred.probability < minProb) return
