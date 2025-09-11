@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Entrenamiento - Detección de Fraudes con CNN 1D</title>
+    <title>Detección de Fraudes - CNN 1D con TensorFlow.js</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
     <style>
@@ -11,7 +11,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -112,469 +112,26 @@
             box-shadow: none;
         }
         
-        .progress {
-            height: 20px;
-            background-color: #f0f0f0;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-        
-        .progress-bar {
-            height: 100%;
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            border-radius: 10px;
-            width: 0%;
-            transition: width 0.3s;
-        }
-        
-        .stats {
-            display: flex;
-            justify-content: space-between;
+        .results {
             margin-top: 20px;
         }
         
-        .stat-box {
-            text-align: center;
+        .result-item {
             padding: 15px;
-            border-radius: 8px;
-            background-color: #f0f8ff;
-            flex: 1;
-            margin: 0 5px;
-        }
-        
-        .stat-box h3 {
-            margin: 0;
-            color: #2575fc;
-        }
-        
-        .stat-box p {
-            font-size: 1.5rem;
-            margin: 10px 0 0;
-            font-weight: bold;
-        }
-        
-        #trainingLog {
-            height: 200px;
-            overflow-y: auto;
+            margin-bottom: 10px;
+            border-radius: 5px;
             background-color: #f9f9f9;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 0.9rem;
+            border-left: 4px solid #6a11cb;
         }
         
-        .log-entry {
-            margin-bottom: 5px;
-            padding: 5px;
-            border-bottom: 1px solid #eee;
+        .result-item.fraud {
+            border-left-color: #ff4d4f;
+            background-color: #fff2f0;
         }
         
-        .model-architecture {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            font-family: monospace;
-            white-space: pre-wrap;
-        }
-        
-        .next-page {
-            text-align: center;
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #e6f7ff;
-            border-radius: 8px;
-            border-left: 4px solid #1890ff;
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            
-            .stats {
-                flex-direction: column;
-            }
-            
-            .stat-box {
-                margin: 5px 0;
-            }
-        }
-    </style>
-</head>
-<body>
-    <header>
-        <h1>Entrenamiento - Detección de Fraudes con CNN 1D</h1>
-        <p class="description">Carga un archivo CSV con datos de comportamiento de jugadores y entrena el modelo de detección de fraudes.</p>
-    </header>
-    
-    <div class="container">
-        <div class="panel">
-            <h2>Cargar Datos</h2>
-            <div class="file-upload" id="fileUpload">
-                <p>Haga clic aquí o arrastre un archivo CSV</p>
-                <input type="file" id="csvFile" accept=".csv" style="display: none;">
-            </div>
-            <button id="trainBtn" disabled>Entrenar Modelo</button>
-            
-            <div class="progress">
-                <div class="progress-bar" id="progressBar"></div>
-            </div>
-            
-            <div class="stats">
-                <div class="stat-box">
-                    <h3>Registros</h3>
-                    <p id="recordsCount">0</p>
-                </div>
-                <div class="stat-box">
-                    <h3>Características</h3>
-                    <p id="featuresCount">0</p>
-                </div>
-                <div class="stat-box">
-                    <h3>Precisión</h3>
-                    <p id="accuracy">0%</p>
-                </div>
-            </div>
-        
-        </div>
-        
-        <div class="panel">
-            <h2>Datos Cargados</h2>
-            <div id="dataPreview">
-                <p>Los datos cargados aparecerán aquí.</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="panel">
-        <h2>Registro de Entrenamiento</h2>
-        <div id="trainingLog"></div>
-    </div>
-
-    <div class="next-page" id="nextPageSection" style="display: none;">
-        <h2>¡Entrenamiento Completado!</h2>
-        <p>El modelo se ha entrenado correctamente. Ahora puede proceder a realizar las predicciones.</p>
-        <button id="goToResultsBtn">Ver Resultados y Reporte</button>
-    </div>
-
-    <script>
-        // Variables globales
-        let model;
-        let trainingData = {};
-        let parsedData = [];
-        let featureColumns = [];
-        
-        // Elementos DOM
-        const fileUpload = document.getElementById('fileUpload');
-        const csvFile = document.getElementById('csvFile');
-        const trainBtn = document.getElementById('trainBtn');
-        const progressBar = document.getElementById('progressBar');
-        const recordsCount = document.getElementById('recordsCount');
-        const featuresCount = document.getElementById('featuresCount');
-        const accuracy = document.getElementById('accuracy');
-        const dataPreview = document.getElementById('dataPreview');
-        const trainingLog = document.getElementById('trainingLog');
-        const nextPageSection = document.getElementById('nextPageSection');
-        const goToResultsBtn = document.getElementById('goToResultsBtn');
-        
-        // Event Listeners
-        fileUpload.addEventListener('click', () => csvFile.click());
-        fileUpload.addEventListener('dragover', handleDragOver);
-        fileUpload.addEventListener('drop', handleDrop);
-        csvFile.addEventListener('change', handleFileSelect);
-        trainBtn.addEventListener('click', trainModel);
-        goToResultsBtn.addEventListener('click', goToResultsPage);
-        
-        // Funciones para manejar archivos
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            fileUpload.classList.add('active');
-        }
-        
-        function handleDrop(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            fileUpload.classList.remove('active');
-            
-            if (e.dataTransfer.files.length) {
-                processCSVFile(e.dataTransfer.files[0]);
-            }
-        }
-        
-        function handleFileSelect(e) {
-            if (e.target.files.length) {
-                processCSVFile(e.target.files[0]);
-            }
-        }
-        
-        function processCSVFile(file) {
-            addLog('Procesando archivo: ' + file.name);
-            
-            Papa.parse(file, {
-                header: true,
-                dynamicTyping: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if (results.data.length === 0) {
-                        addLog('Error: El archivo CSV está vacío o no tiene datos válidos.');
-                        return;
-                    }
-                    
-                    parsedData = results.data;
-                    recordsCount.textContent = parsedData.length;
-                    
-                    // Identificar columnas de características (excluyendo columnas no numéricas)
-                    const firstRow = parsedData[0];
-                    featureColumns = Object.keys(firstRow).filter(key => {
-                        // Excluir columnas no numéricas y columnas específicas
-                        return key !== 'Actor' && key !== 'Type' && 
-                               key !== 'A_Acc' && typeof firstRow[key] === 'number';
-                    });
-                    
-                    featuresCount.textContent = featureColumns.length;
-                    
-                    addLog(`Datos cargados: ${parsedData.length} registros con ${featureColumns.length} características.`);
-                    addLog(`Características: ${featureColumns.join(', ')}`);
-                    
-                    // Mostrar vista previa de datos
-                    showDataPreview();
-                    
-                    // Preparar datos para entrenamiento
-                    prepareTrainingData();
-                    trainBtn.disabled = false;
-                },
-                error: function(error) {
-                    addLog('Error al procesar el archivo CSV: ' + error);
-                }
-            });
-        }
-        
-        function showDataPreview() {
-            let previewHTML = `<p>Primeras 5 filas de los datos:</p>`;
-            previewHTML += `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse;">`;
-            
-            // Encabezados de la tabla
-            previewHTML += `<tr>`;
-            for (const key in parsedData[0]) {
-                if (key === 'Actor' || key === 'Type' || featureColumns.includes(key)) {
-                    previewHTML += `<th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">${key}</th>`;
-                }
-            }
-            previewHTML += `</tr>`;
-            
-            // Filas de datos (máximo 5)
-            for (let i = 0; i < Math.min(5, parsedData.length); i++) {
-                previewHTML += `<tr>`;
-                for (const key in parsedData[i]) {
-                    if (key === 'Actor' || key === 'Type' || featureColumns.includes(key)) {
-                        previewHTML += `<td style="border: 1px solid #ddd; padding: 8px;">${parsedData[i][key]}</td>`;
-                    }
-                }
-                previewHTML += `</tr>`;
-            }
-            
-            previewHTML += `</table></div>`;
-            previewHTML += `<p style="margin-top: 10px; font-style: italic;">Mostrando ${Math.min(5, parsedData.length)} de ${parsedData.length} registros</p>`;
-            
-            dataPreview.innerHTML = previewHTML;
-        }
-        
-        function prepareTrainingData() {
-            // Separar características y etiquetas
-            const features = [];
-            const labels = [];
-            
-            parsedData.forEach(row => {
-                // Obtener valores de características en el orden correcto
-                const featureValues = featureColumns.map(col => row[col]);
-                features.push(featureValues);
-                
-                // Convertir la etiqueta a numérica (Bot -> 1, Human -> 0)
-                labels.push(row.Type === 'Bot' ? 1 : 0);
-            });
-            
-            trainingData = {
-                features: features,
-                labels: labels,
-                inputShape: [featureColumns.length],  // Forma para CNN 1D: [longitud_secuencia]
-                featureColumns: featureColumns,
-                originalData: parsedData
-            };
-            
-            // Guardar datos en localStorage para usar en la página de resultados
-            localStorage.setItem('trainingData', JSON.stringify(trainingData));
-            
-            addLog('Datos preparados para entrenamiento con CNN 1D.');
-            addLog(`Forma de entrada: [${trainingData.inputShape}]`);
-        }
-        
-        function createModel() {
-            const model = tf.sequential();
-            
-            // Capa de entrada
-            model.add(tf.layers.inputLayer({
-                inputShape: [trainingData.inputShape[0]]
-            }));
-            
-            // Remodelar para CNN 1D: [batch, steps, channels]
-            model.add(tf.layers.reshape({
-                targetShape: [trainingData.inputShape[0], 1]
-            }));
-            
-            // Primera capa convolucional 1D
-            model.add(tf.layers.conv1d({
-                filters: 64,
-                kernelSize: 3,
-                activation: 'relu',
-                padding: 'same'
-            }));
-            
-            // Capa de agrupación máxima
-            model.add(tf.layers.maxPooling1d({
-                poolSize: 2,
-                padding: 'same'
-            }));
-            
-            // Segunda capa convolucional 1D
-            model.add(tf.layers.conv1d({
-                filters: 32,
-                kernelSize: 3,
-                activation: 'relu',
-                padding: 'same'
-            }));
-            
-            // Agrupación global para convertir la salida 3D en 2D
-            model.add(tf.layers.globalAveragePooling1d());
-            
-            // Capa completamente conectada
-            model.add(tf.layers.dense({
-                units: 16,
-                activation: 'relu'
-            }));
-            
-            // Capa de salida (clasificación binaria)
-            model.add(tf.layers.dense({
-                units: 1,
-                activation: 'sigmoid'
-            }));
-            
-            // Compilar el modelo
-            model.compile({
-                optimizer: tf.train.adam(0.001),
-                loss: 'binaryCrossentropy',
-                metrics: ['accuracy']
-            });
-            
-            return model;
-        }
-        
-        async function trainModel() {
-            trainBtn.disabled = true;
-            addLog('Comenzando entrenamiento del modelo CNN 1D...');
-            
-            // Crear el modelo
-            model = createModel();
-            
-            // Convertir datos a tensores
-            const featuresTensor = tf.tensor2d(trainingData.features);
-            const labelsTensor = tf.tensor1d(trainingData.labels);
-            
-            // Entrenar el modelo
-            try {
-                await model.fit(featuresTensor, labelsTensor, {
-                    epochs: 30,
-                    batchSize: 32,
-                    validationSplit: 0.2,
-                    callbacks: {
-                        onEpochEnd: async (epoch, logs) => {
-                            const progress = ((epoch + 1) / 30) * 100;
-                            progressBar.style.width = `${progress}%`;
-                            addLog(`Época ${epoch + 1}/30 - Pérdida: ${logs.loss.toFixed(4)} - Precisión: ${(logs.acc * 100).toFixed(2)}% - Val pérdida: ${logs.val_loss ? logs.val_loss.toFixed(4) : 'N/A'} - Val precisión: ${logs.val_acc ? (logs.val_acc * 100).toFixed(2) + '%' : 'N/A'}`);
-                        }
-                    }
-                });
-                
-                addLog('Entrenamiento completado.');
-                
-                // Evaluar el modelo
-                const evalResult = model.evaluate(featuresTensor, labelsTensor);
-                const accuracyValue = evalResult[1].dataSync()[0];
-                accuracy.textContent = `${(accuracyValue * 100).toFixed(1)}%`;
-                
-                addLog(`Precisión final del modelo: ${(accuracyValue * 100).toFixed(2)}%`);
-                
-                // Guardar el modelo
-                await saveModel();
-                
-            } catch (error) {
-                addLog('Error durante el entrenamiento: ' + error.message);
-                console.error(error);
-                trainBtn.disabled = false;
-            } finally {
-                // Liberar tensores de memoria
-                if (featuresTensor) featuresTensor.dispose();
-                if (labelsTensor) labelsTensor.dispose();
-            }
-        }
-        
-        async function saveModel() {
-            try {
-                // Guardar el modelo en localStorage
-                await model.save('localstorage://fraud-detection-model');
-                addLog('Modelo guardado correctamente.');
-                
-                // Mostrar sección para ir a la página de resultados
-                nextPageSection.style.display = 'block';
-            } catch (error) {
-                addLog('Error al guardar el modelo: ' + error);
-            }
-        }
-        
-        function goToResultsPage() {
-            // Redirigir a la página de resultados
-            window.location.href = 'results.html';
-        }
-        
-        function addLog(message) {
-            const logEntry = document.createElement('div');
-            logEntry.className = 'log-entry';
-            logEntry.textContent = message;
-            trainingLog.appendChild(logEntry);
-            trainingLog.scrollTop = trainingLog.scrollHeight;
-        }
-        
-        // Mensaje inicial
-        addLog('Sistema de detección de fraudes con CNN 1D listo. Cargue un archivo CSV para comenzar.');
-    </script>
-</body>
-</html>        }
-        
-        button {
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
-            margin: 10px 0;
-            width: 100%;
-            transition: all 0.3s;
-        }
-        
-        button:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-        
-        button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
+        .result-item.legit {
+            border-left-color: #52c41a;
+            background-color: #f6ffed;
         }
         
         .progress {
@@ -644,15 +201,6 @@
             white-space: pre-wrap;
         }
         
-        .next-page {
-            text-align: center;
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #e6f7ff;
-            border-radius: 8px;
-            border-left: 4px solid #1890ff;
-        }
-        
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
@@ -670,8 +218,8 @@
 </head>
 <body>
     <header>
-        <h1>Entrenamiento - Detección de Fraudes con CNN 1D</h1>
-        <p class="description">Carga un archivo CSV con datos de comportamiento de jugadores y entrena el modelo de detección de fraudes.</p>
+        <h1>Detección de Fraudes con CNN 1D</h1>
+        <p class="description">Carga un archivo CSV con datos de comportamiento de jugadores y detecta posibles fraudes usando una red neuronal convolucional 1D.</p>
     </header>
     
     <div class="container">
@@ -682,6 +230,7 @@
                 <input type="file" id="csvFile" accept=".csv" style="display: none;">
             </div>
             <button id="trainBtn" disabled>Entrenar Modelo</button>
+            <button id="predictBtn" disabled>Predecir Fraudes</button>
             
             <div class="progress">
                 <div class="progress-bar" id="progressBar"></div>
@@ -715,9 +264,9 @@
         </div>
         
         <div class="panel">
-            <h2>Datos Cargados</h2>
-            <div id="dataPreview">
-                <p>Los datos cargados aparecerán aquí.</p>
+            <h2>Resultados</h2>
+            <div id="resultsContainer" class="results">
+                <p>Los resultados aparecerán aquí después de ejecutar la predicción.</p>
             </div>
         </div>
     </div>
@@ -725,12 +274,6 @@
     <div class="panel">
         <h2>Registro de Entrenamiento</h2>
         <div id="trainingLog"></div>
-    </div>
-
-    <div class="next-page" id="nextPageSection" style="display: none;">
-        <h2>¡Entrenamiento Completado!</h2>
-        <p>El modelo se ha entrenado correctamente. Ahora puede proceder a realizar las predicciones.</p>
-        <button id="goToResultsBtn">Ver Resultados y Reporte</button>
     </div>
 
     <script>
@@ -744,14 +287,13 @@
         const fileUpload = document.getElementById('fileUpload');
         const csvFile = document.getElementById('csvFile');
         const trainBtn = document.getElementById('trainBtn');
+        const predictBtn = document.getElementById('predictBtn');
         const progressBar = document.getElementById('progressBar');
         const recordsCount = document.getElementById('recordsCount');
         const featuresCount = document.getElementById('featuresCount');
         const accuracy = document.getElementById('accuracy');
-        const dataPreview = document.getElementById('dataPreview');
+        const resultsContainer = document.getElementById('resultsContainer');
         const trainingLog = document.getElementById('trainingLog');
-        const nextPageSection = document.getElementById('nextPageSection');
-        const goToResultsBtn = document.getElementById('goToResultsBtn');
         
         // Event Listeners
         fileUpload.addEventListener('click', () => csvFile.click());
@@ -759,7 +301,7 @@
         fileUpload.addEventListener('drop', handleDrop);
         csvFile.addEventListener('change', handleFileSelect);
         trainBtn.addEventListener('click', trainModel);
-        goToResultsBtn.addEventListener('click', goToResultsPage);
+        predictBtn.addEventListener('click', predictFrauds);
         
         // Funciones para manejar archivos
         function handleDragOver(e) {
@@ -800,25 +342,16 @@
                     parsedData = results.data;
                     recordsCount.textContent = parsedData.length;
                     
-                    // Verificar que existe la columna Type
-                    if (!parsedData[0].hasOwnProperty('Type')) {
-                        addLog('Error: El archivo CSV debe contener una columna "Type" con valores "Bot" o "Human".');
-                        return;
-                    }
-                    
                     // Identificar columnas de características (excluyendo la columna Actor y Type)
                     const firstRow = parsedData[0];
                     featureColumns = Object.keys(firstRow).filter(key => 
-                        key !== 'Actor' && key !== 'Type' && typeof firstRow[key] === 'number'
+                        key !== 'Actor' && key !== 'Type' && key !== 'A_Acc' && typeof firstRow[key] === 'number'
                     );
                     
                     featuresCount.textContent = featureColumns.length;
                     
                     addLog(`Datos cargados: ${parsedData.length} registros con ${featureColumns.length} características.`);
                     addLog(`Características: ${featureColumns.join(', ')}`);
-                    
-                    // Mostrar vista previa de datos
-                    showDataPreview();
                     
                     // Preparar datos para entrenamiento
                     prepareTrainingData();
@@ -830,36 +363,6 @@
             });
         }
         
-        function showDataPreview() {
-            let previewHTML = `<p>Primeras 5 filas de los datos:</p>`;
-            previewHTML += `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse;">`;
-            
-            // Encabezados de la tabla
-            previewHTML += `<tr>`;
-            for (const key in parsedData[0]) {
-                if (key === 'Actor' || key === 'Type' || featureColumns.includes(key)) {
-                    previewHTML += `<th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">${key}</th>`;
-                }
-            }
-            previewHTML += `</tr>`;
-            
-            // Filas de datos (máximo 5)
-            for (let i = 0; i < Math.min(5, parsedData.length); i++) {
-                previewHTML += `<tr>`;
-                for (const key in parsedData[i]) {
-                    if (key === 'Actor' || key === 'Type' || featureColumns.includes(key)) {
-                        previewHTML += `<td style="border: 1px solid #ddd; padding: 8px;">${parsedData[i][key]}</td>`;
-                    }
-                }
-                previewHTML += `</tr>`;
-            }
-            
-            previewHTML += `</table></div>`;
-            previewHTML += `<p style="margin-top: 10px; font-style: italic;">Mostrando ${Math.min(5, parsedData.length)} de ${parsedData.length} registros</p>`;
-            
-            dataPreview.innerHTML = previewHTML;
-        }
-        
         function prepareTrainingData() {
             // Separar características y etiquetas
             const features = [];
@@ -867,10 +370,7 @@
             
             parsedData.forEach(row => {
                 // Obtener valores de características en el orden correcto
-                const featureValues = featureColumns.map(col => {
-                    // Manejar valores faltantes reemplazándolos con 0
-                    return row[col] !== undefined && row[col] !== null ? row[col] : 0;
-                });
+                const featureValues = featureColumns.map(col => row[col]);
                 features.push(featureValues);
                 
                 // Convertir la etiqueta a numérica (Bot -> 1, Human -> 0)
@@ -880,13 +380,8 @@
             trainingData = {
                 features: features,
                 labels: labels,
-                inputShape: [featureColumns.length, 1],  // Forma para CNN 1D: [longitud_secuencia, canales]
-                featureColumns: featureColumns,
-                originalData: parsedData
+                inputShape: [featureColumns.length, 1]  // Forma para CNN 1D: [longitud_secuencia, canales]
             };
-            
-            // Guardar datos en localStorage para usar en la página de resultados
-            localStorage.setItem('trainingData', JSON.stringify(trainingData));
             
             addLog('Datos preparados para entrenamiento con CNN 1D.');
             addLog(`Forma de entrada: [${trainingData.inputShape[0]}, ${trainingData.inputShape[1]}]`);
@@ -960,58 +455,87 @@
             const labelsTensor = tf.tensor1d(trainingData.labels);
             
             // Entrenar el modelo
-            try {
-                await model.fit(featuresTensor, labelsTensor, {
-                    epochs: 30,
-                    batchSize: 32,
-                    validationSplit: 0.2,
-                    callbacks: {
-                        onEpochEnd: (epoch, logs) => {
-                            const progress = ((epoch + 1) / 30) * 100;
-                            progressBar.style.width = `${progress}%`;
-                            addLog(`Época ${epoch + 1}/30 - Pérdida: ${logs.loss.toFixed(4)} - Precisión: ${(logs.acc * 100).toFixed(2)}%`);
-                        },
-                        onTrainEnd: () => {
-                            addLog('Entrenamiento completado.');
-                            
-                            // Evaluar el modelo
-                            const evalResult = model.evaluate(featuresTensor, labelsTensor);
-                            const accuracyValue = evalResult[1].dataSync()[0];
-                            accuracy.textContent = `${(accuracyValue * 100).toFixed(1)}%`;
-                            
-                            addLog(`Precisión final del modelo: ${(accuracyValue * 100).toFixed(2)}%`);
-                            
-                            // Guardar el modelo
-                            saveModel();
-                        }
+            await model.fit(featuresTensor, labelsTensor, {
+                epochs: 30,
+                batchSize: 32,
+                validationSplit: 0.2,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => {
+                        const progress = ((epoch + 1) / 30) * 100;
+                        progressBar.style.width = `${progress}%`;
+                        addLog(`Época ${epoch + 1}/30 - Pérdida: ${logs.loss.toFixed(4)} - Precisión: ${(logs.acc * 100).toFixed(2)}%`);
+                    },
+                    onTrainEnd: () => {
+                        addLog('Entrenamiento completado.');
+                        predictBtn.disabled = false;
                     }
-                });
-            } catch (error) {
-                addLog('Error durante el entrenamiento: ' + error.message);
-                trainBtn.disabled = false;
-            }
+                }
+            });
+            
+            // Evaluar el modelo
+            const evalResult = model.evaluate(featuresTensor, labelsTensor);
+            const accuracyValue = await evalResult[1].data();
+            accuracy.textContent = `${(accuracyValue[0] * 100).toFixed(1)}%`;
+            
+            addLog(`Precisión final del modelo: ${(accuracyValue[0] * 100).toFixed(2)}%`);
             
             // Liberar tensores de memoria
             featuresTensor.dispose();
             labelsTensor.dispose();
+            evalResult[0].dispose();
+            evalResult[1].dispose();
         }
         
-        async function saveModel() {
-            try {
-                // Guardar el modelo en localStorage
-                await model.save('localstorage://fraud-detection-model');
-                addLog('Modelo guardado correctamente.');
+        async function predictFrauds() {
+            predictBtn.disabled = true;
+            resultsContainer.innerHTML = '<p>Realizando predicciones...</p>';
+            
+            // Convertir datos a tensores y remodelar para CNN 1D
+            const featuresTensor = tf.tensor2d(trainingData.features)
+                .reshape([-1, ...trainingData.inputShape]);
+            
+            // Realizar predicciones
+            const predictions = model.predict(featuresTensor);
+            const predictionValues = await predictions.data();
+            
+            // Procesar resultados
+            resultsContainer.innerHTML = '';
+            let fraudCount = 0;
+            let correctPredictions = 0;
+            
+            for (let i = 0; i < parsedData.length; i++) {
+                const row = parsedData[i];
+                const prediction = predictionValues[i];
+                const isFraud = prediction > 0.5;
+                const actualLabel = row.Type === 'Bot' ? 1 : 0;
+                const isCorrect = (isFraud && actualLabel === 1) || (!isFraud && actualLabel === 0);
                 
-                // Mostrar sección para ir a la página de resultados
-                nextPageSection.style.display = 'block';
-            } catch (error) {
-                addLog('Error al guardar el modelo: ' + error);
+                if (isFraud) fraudCount++;
+                if (isCorrect) correctPredictions++;
+                
+                const resultItem = document.createElement('div');
+                resultItem.className = `result-item ${isFraud ? 'fraud' : 'legit'}`;
+                
+                resultItem.innerHTML = `
+                    <strong>Actor ${row.Actor}</strong> - 
+                    Probabilidad de fraude: ${(prediction * 100).toFixed(2)}% - 
+                    <strong>${isFraud ? 'POSIBLE FRAUDE' : 'Legítimo'}</strong>
+                    ${row.Type ? ` (Etiqueta real: ${row.Type})` : ''}
+                    ${isCorrect ? ' ✓' : ' ✗'}
+                `;
+                
+                resultsContainer.appendChild(resultItem);
             }
-        }
-        
-        function goToResultsPage() {
-            // Redirigir a la página de resultados (results.html)
-            window.location.href = 'results.html';
+            
+            // Actualizar estadísticas
+            accuracy.textContent = `${(correctPredictions / parsedData.length * 100).toFixed(1)}%`;
+            
+            addLog(`Predicciones completadas. Se detectaron ${fraudCount} posibles fraudes.`);
+            addLog(`Precisión en predicciones: ${(correctPredictions / parsedData.length * 100).toFixed(2)}%`);
+            
+            // Liberar tensores de memoria
+            featuresTensor.dispose();
+            predictions.dispose();
         }
         
         function addLog(message) {
