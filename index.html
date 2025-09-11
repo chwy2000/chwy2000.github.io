@@ -335,10 +335,16 @@
                     parsedData = results.data;
                     recordsCount.textContent = parsedData.length;
                     
+                    // Verificar que existe la columna Type
+                    if (!parsedData[0].hasOwnProperty('Type')) {
+                        addLog('Error: El archivo CSV debe contener una columna "Type" con valores "Bot" o "Human".');
+                        return;
+                    }
+                    
                     // Identificar columnas de características (excluyendo la columna Actor y Type)
                     const firstRow = parsedData[0];
                     featureColumns = Object.keys(firstRow).filter(key => 
-                        key !== 'Actor' && key !== 'Type' && key !== 'A_Acc' && typeof firstRow[key] === 'number'
+                        key !== 'Actor' && key !== 'Type' && typeof firstRow[key] === 'number'
                     );
                     
                     featuresCount.textContent = featureColumns.length;
@@ -396,7 +402,10 @@
             
             parsedData.forEach(row => {
                 // Obtener valores de características en el orden correcto
-                const featureValues = featureColumns.map(col => row[col]);
+                const featureValues = featureColumns.map(col => {
+                    // Manejar valores faltantes reemplazándolos con 0
+                    return row[col] !== undefined && row[col] !== null ? row[col] : 0;
+                });
                 features.push(featureValues);
                 
                 // Convertir la etiqueta a numérica (Bot -> 1, Human -> 0)
@@ -486,31 +495,36 @@
             const labelsTensor = tf.tensor1d(trainingData.labels);
             
             // Entrenar el modelo
-            await model.fit(featuresTensor, labelsTensor, {
-                epochs: 30,
-                batchSize: 32,
-                validationSplit: 0.2,
-                callbacks: {
-                    onEpochEnd: (epoch, logs) => {
-                        const progress = ((epoch + 1) / 30) * 100;
-                        progressBar.style.width = `${progress}%`;
-                        addLog(`Época ${epoch + 1}/30 - Pérdida: ${logs.loss.toFixed(4)} - Precisión: ${(logs.acc * 100).toFixed(2)}%`);
-                    },
-                    onTrainEnd: () => {
-                        addLog('Entrenamiento completado.');
-                        
-                        // Evaluar el modelo
-                        const evalResult = model.evaluate(featuresTensor, labelsTensor);
-                        const accuracyValue = evalResult[1].dataSync()[0];
-                        accuracy.textContent = `${(accuracyValue * 100).toFixed(1)}%`;
-                        
-                        addLog(`Precisión final del modelo: ${(accuracyValue * 100).toFixed(2)}%`);
-                        
-                        // Guardar el modelo
-                        saveModel();
+            try {
+                await model.fit(featuresTensor, labelsTensor, {
+                    epochs: 30,
+                    batchSize: 32,
+                    validationSplit: 0.2,
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            const progress = ((epoch + 1) / 30) * 100;
+                            progressBar.style.width = `${progress}%`;
+                            addLog(`Época ${epoch + 1}/30 - Pérdida: ${logs.loss.toFixed(4)} - Precisión: ${(logs.acc * 100).toFixed(2)}%`);
+                        },
+                        onTrainEnd: () => {
+                            addLog('Entrenamiento completado.');
+                            
+                            // Evaluar el modelo
+                            const evalResult = model.evaluate(featuresTensor, labelsTensor);
+                            const accuracyValue = evalResult[1].dataSync()[0];
+                            accuracy.textContent = `${(accuracyValue * 100).toFixed(1)}%`;
+                            
+                            addLog(`Precisión final del modelo: ${(accuracyValue * 100).toFixed(2)}%`);
+                            
+                            // Guardar el modelo
+                            saveModel();
+                        }
                     }
-                }
-            });
+                });
+            } catch (error) {
+                addLog('Error durante el entrenamiento: ' + error.message);
+                trainBtn.disabled = false;
+            }
             
             // Liberar tensores de memoria
             featuresTensor.dispose();
@@ -520,7 +534,7 @@
         async function saveModel() {
             try {
                 // Guardar el modelo en localStorage
-                const modelInfo = await model.save('localstorage://fraud-detection-model');
+                await model.save('localstorage://fraud-detection-model');
                 addLog('Modelo guardado correctamente.');
                 
                 // Mostrar sección para ir a la página de resultados
@@ -531,7 +545,7 @@
         }
         
         function goToResultsPage() {
-            // Redirigir a la página de resultados
+            // Redirigir a la página de resultados (results.html)
             window.location.href = 'results.html';
         }
         
