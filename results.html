@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados - Detección de Fraudes con CNN 1D</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+        
+        .description {
+            font-size: 1.1rem;
+            margin-top: 10px;
+        }
+        
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .panel {
+            flex: 1;
+            min-width: 300px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .panel h2 {
+            color: #2575fc;
+            margin-top: 0;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 10px 0;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .results {
+            margin-top: 20px;
+        }
+        
+        .result-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #6a11cb;
+        }
+        
+        .result-item.fraud {
+            border-left-color: #ff4d4f;
+            background-color: #fff2f0;
+        }
+        
+        .result-item.legit {
+            border-left-color: #52c41a;
+            background-color: #f6ffed;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f0f8ff;
+            flex: 1;
+            margin: 0 5px;
+        }
+        
+        .stat-box h3 {
+            margin: 0;
+            color: #2575fc;
+        }
+        
+        .stat-box p {
+            font-size: 1.5rem;
+            margin: 10px 0 0;
+            font-weight: bold;
+        }
+        
+        .download-section {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #e6f7ff;
+            border-radius: 8px;
+            border-left: 4px solid #1890ff;
+        }
+        
+        .filters {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+        }
+        
+        .filters select, .filters input {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .stats {
+                flex-direction: column;
+            }
+            
+            .stat-box {
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Resultados - Detección de Fraudes con CNN 1D</h1>
+        <p class="description">Resultados de la detección de fraudes y reporte descargable.</p>
+    </header>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>Filtros</h2>
+            <div class="filters">
+                <label for="filterType">Filtrar por tipo:</label>
+                <select id="filterType">
+                    <option value="all">Todos</option>
+                    <option value="fraud">Solo fraudes</option>
+                    <option value="legit">Solo legítimos</option>
+                </select>
+                
+                <label for="minProbability">Probabilidad mínima:</label>
+                <input type="number" id="minProbability" min="0" max="100" step="1" value="0">
+                <span>%</span>
+                
+                <button id="applyFilters">Aplicar Filtros</button>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-box">
+                    <h3>Total</h3>
+                    <p id="totalCount">0</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Fraudes</h3>
+                    <p id="fraudCount">0</p>
+                </div>
+                <div class="stat-box">
+                    <h3>Precisión</h3>
+                    <p id="accuracy">0%</p>
+                </div>
+            </div>
+            
+            <h2>Resultados de Predicción</h2>
+            <div id="resultsContainer" class="results">
+                <p>Los resultados aparecerán aquí después de ejecutar la predicción.</p>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Resumen de Resultados</h2>
+            <div id="summaryContainer">
+                <p>El resumen aparecerá aquí después de ejecutar la predicción.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="download-section">
+        <h2>Reporte de Detección de Fraudes</h2>
+        <p>Genere y descargue un reporte completo con los resultados de la detección de fraudes.</p>
+        <button id="downloadReport">Descargar Reporte Completo (CSV)</button>
+        <button id="downloadSummary">Descargar Resumen (PDF)</button>
+    </div>
+
+    <script>
+        // Variables globales
+        let model;
+        let trainingData = {};
+        let predictions = [];
+        let filteredPredictions = [];
+        
+        // Elementos DOM
+        const filterType = document.getElementById('filterType');
+        const minProbability = document.getElementById('minProbability');
+        const applyFilters = document.getElementById('applyFilters');
+        const totalCount = document.getElementById('totalCount');
+        const fraudCount = document.getElementById('fraudCount');
+        const accuracyElem = document.getElementById('accuracy');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const summaryContainer = document.getElementById('summaryContainer');
+        const downloadReport = document.getElementById('downloadReport');
+        const downloadSummary = document.getElementById('downloadSummary');
+        
+        // Event Listeners
+        applyFilters.addEventListener('click', applyResultsFilters);
+        downloadReport.addEventListener('click', downloadCSVReport);
+        downloadSummary.addEventListener('click', downloadPDFSummary);
+        
+        // Cargar modelo y datos al iniciar la página
+        window.addEventListener('load', async () => {
+            try {
+                // Cargar datos de entrenamiento desde localStorage
+                const trainingDataStr = localStorage.getItem('trainingData');
+                if (!trainingDataStr) {
+                    resultsContainer.innerHTML = '<p>Error: No se encontraron datos de entrenamiento. Por favor, regrese a la página de entrenamiento.</p>';
+                    return;
+                }
+                
+                trainingData = JSON.parse(trainingDataStr);
+                
+                // Cargar modelo
+                model = await tf.loadLayersModel('localstorage://fraud-detection-model');
+                
+                // Realizar predicciones
+                await makePredictions();
+            } catch (error) {
+                resultsContainer.innerHTML = `<p>Error al cargar el modelo: ${error.message}. Por favor, regrese a la página de entrenamiento.</p>`;
+            }
+        });
+        
+        async function makePredictions() {
+            resultsContainer.innerHTML = '<p>Realizando predicciones...</p>';
+            
+            // Convertir datos a tensores y remodelar para CNN 1D
+            const featuresTensor = tf.tensor2d(trainingData.features)
+                .reshape([-1, ...trainingData.inputShape]);
+            
+            // Realizar predicciones
+            const predictionsTensor = model.predict(featuresTensor);
+            const predictionValues = await predictionsTensor.data();
+            
+            // Procesar resultados
+            predictions = [];
+            let fraudCount = 0;
+            let correctPredictions = 0;
+            
+            for (let i = 0; i < trainingData.originalData.length; i++) {
+                const row = trainingData.originalData[i];
+                const prediction = predictionValues[i];
+                const isFraud = prediction > 0.5;
+                const actualLabel = row.Type === 'Bot' ? 1 : 0;
+                const isCorrect = (isFraud && actualLabel === 1) || (!isFraud && actualLabel === 0);
+                
+                if (isFraud) fraudCount++;
+                if (isCorrect) correctPredictions++;
+                
+                predictions.push({
+                    actor: row.Actor,
+                    probability: prediction,
+                    isFraud: isFraud,
+                    actualType: row.Type,
+                    isCorrect: isCorrect,
+                    features: trainingData.features[i]
+                });
+            }
+            
+            // Actualizar estadísticas
+            totalCount.textContent = predictions.length;
+            fraudCount.textContent = fraudCount;
+            accuracyElem.textContent = `${(correctPredictions / predictions.length * 100).toFixed(1)}%`;
+            
+            // Mostrar resultados
+            filteredPredictions = [...predictions];
+            displayResults();
+            displaySummary();
+            
+            // Liberar tensores de memoria
+            featuresTensor.dispose();
+            predictionsTensor.dispose();
+        }
+        
+        function displayResults() {
+            resultsContainer.innerHTML = '';
+            
+            if (filteredPredictions.length === 0) {
+                resultsContainer.innerHTML = '<p>No hay resultados que coincidan con los filtros aplicados.</p>';
+                return;
+            }
+            
+            filteredPredictions.forEach(pred => {
+                const resultItem = document.createElement('div');
+                resultItem.className = `result-item ${pred.isFraud ? 'fraud' : 'legit'}`;
+                
+                resultItem.innerHTML = `
+                    <strong>Actor ${pred.actor}</strong> - 
+                    Probabilidad de fraude: ${(pred.probability * 100).toFixed(2)}% - 
+                    <strong>${pred.isFraud ? 'POSIBLE FRAUDE' : 'Legítimo'}</strong>
+                    ${pred.actualType ? ` (Etiqueta real: ${pred.actualType})` : ''}
+                    ${pred.isCorrect ? ' ✓' : ' ✗'}
+                `;
+                
+                resultsContainer.appendChild(resultItem);
+            });
+        }
+        
+        function displaySummary() {
+            const frauds = predictions.filter(p => p.isFraud);
+            const legit = predictions.filter(p => !p.isFraud);
+            const correct = predictions.filter(p => p.isCorrect);
+            const incorrect = predictions.filter(p => !p.isCorrect);
+            
+            const accuracy = (correct.length / predictions.length * 100).toFixed(2);
+            const avgFraudProbability = frauds.length > 0 ? 
+                (frauds.reduce((sum, p) => sum + p.probability, 0) / frauds.length * 100).toFixed(2) : 0;
+            
+            summaryContainer.innerHTML = `
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px; margin: 10px; padding: 15px; background-color: #f0f8ff; border-radius: 8px;">
+                        <h3>Precisión General</h3>
+                        <p style="font-size: 2rem; font-weight: bold; color: #2575fc; text-align: center;">${accuracy}%</p>
+                    </div>
+                    <div style="flex: 1; min-width: 200px; margin: 10px; padding: 15px; background-color: #fff2f0; border-radius: 8px;">
+                        <h3>Posibles Fraudes</h3>
+                        <p style="font-size: 2rem; font-weight: bold; color: #ff4d4f; text-align: center;">${frauds.length}</p>
+                    </div>
+                    <div style="flex: 1; min-width: 200px; margin: 10px; padding: 15px; background-color: #f6ffed; border-radius: 8px;">
+                        <h3>Transacciones Legítimas</h3>
+                        <p style="font-size: 2rem; font-weight: bold; color: #52c41a; text-align: center;">${legit.length}</p>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h3>Estadísticas Detalladas</h3>
+                    <ul>
+                        <li>Total de registros analizados: ${predictions.length}</li>
+                        <li>Predicciones correctas: ${correct.length} (${accuracy}%)</li>
+                        <li>Predicciones incorrectas: ${incorrect.length} (${(100 - accuracy).toFixed(2)}%)</li>
+                        <li>Probabilidad promedio de fraude: ${avgFraudProbability}%</li>
+                    </ul>
+                </div>
+            `;
+        }
+        
+        function applyResultsFilters() {
+            const typeFilter = filterType.value;
+            const minProb = parseInt(minProbability.value) / 100;
+            
+            filteredPredictions = predictions.filter(pred => {
+                // Filtrar por tipo
+                if (typeFilter === 'fraud' && !pred.isFraud) return false;
+                if (typeFilter === 'legit' && pred.isFraud) return false;
+                
+                // Filtrar por probabilidad mínima
+                if (pred.probability < minProb) return false;
+                
+                return true;
+            });
+            
+            displayResults();
+        }
+        
+        function downloadCSVReport() {
+            // Crear contenido CSV
+            let csvContent = "Actor,Probabilidad de Fraude,Resultado,Etiqueta Real,Correcto\n";
+            
+            predictions.forEach(pred => {
+                csvContent += `${pred.actor},${(pred.probability * 100).toFixed(2)}%,${pred.isFraud ? 'Fraude' : 'Legítimo'},${pred.actualType || 'Desconocido'},${pred.isCorrect ? 'Sí' : 'No'}\n`;
+            });
+            
+            // Crear blob y descargar
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", "reporte_deteccion_fraudes.csv");
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function downloadPDFSummary() {
+            // En una implementación real, aquí se generaría un PDF con una librería como jsPDF
+            // Por ahora, mostraremos un mensaje
+            alert("En una implementación completa, aquí se generaría y
