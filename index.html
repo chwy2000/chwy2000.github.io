@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detección de Fraudes - CNN 1D con TensorFlow.js</title>
+    <title>Entrenamiento - Detección de Fraudes con CNN 1D</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
     <style>
@@ -11,7 +11,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -112,28 +112,6 @@
             box-shadow: none;
         }
         
-        .results {
-            margin-top: 20px;
-        }
-        
-        .result-item {
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-            border-left: 4px solid #6a11cb;
-        }
-        
-        .result-item.fraud {
-            border-left-color: #ff4d4f;
-            background-color: #fff2f0;
-        }
-        
-        .result-item.legit {
-            border-left-color: #52c41a;
-            background-color: #f6ffed;
-        }
-        
         .progress {
             height: 20px;
             background-color: #f0f0f0;
@@ -201,6 +179,15 @@
             white-space: pre-wrap;
         }
         
+        .next-page {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #e6f7ff;
+            border-radius: 8px;
+            border-left: 4px solid #1890ff;
+        }
+        
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
@@ -218,8 +205,8 @@
 </head>
 <body>
     <header>
-        <h1>Detección de Fraudes con CNN 1D</h1>
-        <p class="description">Carga un archivo CSV con datos de comportamiento de jugadores y detecta posibles fraudes usando una red neuronal convolucional 1D.</p>
+        <h1>Entrenamiento - Detección de Fraudes con CNN 1D</h1>
+        <p class="description">Carga un archivo CSV con datos de comportamiento de jugadores y entrena el modelo de detección de fraudes.</p>
     </header>
     
     <div class="container">
@@ -230,7 +217,6 @@
                 <input type="file" id="csvFile" accept=".csv" style="display: none;">
             </div>
             <button id="trainBtn" disabled>Entrenar Modelo</button>
-            <button id="predictBtn" disabled>Predecir Fraudes</button>
             
             <div class="progress">
                 <div class="progress-bar" id="progressBar"></div>
@@ -264,9 +250,9 @@
         </div>
         
         <div class="panel">
-            <h2>Resultados</h2>
-            <div id="resultsContainer" class="results">
-                <p>Los resultados aparecerán aquí después de ejecutar la predicción.</p>
+            <h2>Datos Cargados</h2>
+            <div id="dataPreview">
+                <p>Los datos cargados aparecerán aquí.</p>
             </div>
         </div>
     </div>
@@ -274,6 +260,12 @@
     <div class="panel">
         <h2>Registro de Entrenamiento</h2>
         <div id="trainingLog"></div>
+    </div>
+
+    <div class="next-page" id="nextPageSection" style="display: none;">
+        <h2>¡Entrenamiento Completado!</h2>
+        <p>El modelo se ha entrenado correctamente. Ahora puede proceder a realizar las predicciones.</p>
+        <button id="goToResultsBtn">Ver Resultados y Reporte</button>
     </div>
 
     <script>
@@ -287,13 +279,14 @@
         const fileUpload = document.getElementById('fileUpload');
         const csvFile = document.getElementById('csvFile');
         const trainBtn = document.getElementById('trainBtn');
-        const predictBtn = document.getElementById('predictBtn');
         const progressBar = document.getElementById('progressBar');
         const recordsCount = document.getElementById('recordsCount');
         const featuresCount = document.getElementById('featuresCount');
         const accuracy = document.getElementById('accuracy');
-        const resultsContainer = document.getElementById('resultsContainer');
+        const dataPreview = document.getElementById('dataPreview');
         const trainingLog = document.getElementById('trainingLog');
+        const nextPageSection = document.getElementById('nextPageSection');
+        const goToResultsBtn = document.getElementById('goToResultsBtn');
         
         // Event Listeners
         fileUpload.addEventListener('click', () => csvFile.click());
@@ -301,7 +294,7 @@
         fileUpload.addEventListener('drop', handleDrop);
         csvFile.addEventListener('change', handleFileSelect);
         trainBtn.addEventListener('click', trainModel);
-        predictBtn.addEventListener('click', predictFrauds);
+        goToResultsBtn.addEventListener('click', goToResultsPage);
         
         // Funciones para manejar archivos
         function handleDragOver(e) {
@@ -353,6 +346,9 @@
                     addLog(`Datos cargados: ${parsedData.length} registros con ${featureColumns.length} características.`);
                     addLog(`Características: ${featureColumns.join(', ')}`);
                     
+                    // Mostrar vista previa de datos
+                    showDataPreview();
+                    
                     // Preparar datos para entrenamiento
                     prepareTrainingData();
                     trainBtn.disabled = false;
@@ -361,6 +357,36 @@
                     addLog('Error al procesar el archivo CSV: ' + error);
                 }
             });
+        }
+        
+        function showDataPreview() {
+            let previewHTML = `<p>Primeras 5 filas de los datos:</p>`;
+            previewHTML += `<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse;">`;
+            
+            // Encabezados de la tabla
+            previewHTML += `<tr>`;
+            for (const key in parsedData[0]) {
+                if (key === 'Actor' || key === 'Type' || featureColumns.includes(key)) {
+                    previewHTML += `<th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">${key}</th>`;
+                }
+            }
+            previewHTML += `</tr>`;
+            
+            // Filas de datos (máximo 5)
+            for (let i = 0; i < Math.min(5, parsedData.length); i++) {
+                previewHTML += `<tr>`;
+                for (const key in parsedData[i]) {
+                    if (key === 'Actor' || key === 'Type' || featureColumns.includes(key)) {
+                        previewHTML += `<td style="border: 1px solid #ddd; padding: 8px;">${parsedData[i][key]}</td>`;
+                    }
+                }
+                previewHTML += `</tr>`;
+            }
+            
+            previewHTML += `</table></div>`;
+            previewHTML += `<p style="margin-top: 10px; font-style: italic;">Mostrando ${Math.min(5, parsedData.length)} de ${parsedData.length} registros</p>`;
+            
+            dataPreview.innerHTML = previewHTML;
         }
         
         function prepareTrainingData() {
@@ -380,8 +406,13 @@
             trainingData = {
                 features: features,
                 labels: labels,
-                inputShape: [featureColumns.length, 1]  // Forma para CNN 1D: [longitud_secuencia, canales]
+                inputShape: [featureColumns.length, 1],  // Forma para CNN 1D: [longitud_secuencia, canales]
+                featureColumns: featureColumns,
+                originalData: parsedData
             };
+            
+            // Guardar datos en localStorage para usar en la página de resultados
+            localStorage.setItem('trainingData', JSON.stringify(trainingData));
             
             addLog('Datos preparados para entrenamiento con CNN 1D.');
             addLog(`Forma de entrada: [${trainingData.inputShape[0]}, ${trainingData.inputShape[1]}]`);
@@ -467,75 +498,41 @@
                     },
                     onTrainEnd: () => {
                         addLog('Entrenamiento completado.');
-                        predictBtn.disabled = false;
+                        
+                        // Evaluar el modelo
+                        const evalResult = model.evaluate(featuresTensor, labelsTensor);
+                        const accuracyValue = evalResult[1].dataSync()[0];
+                        accuracy.textContent = `${(accuracyValue * 100).toFixed(1)}%`;
+                        
+                        addLog(`Precisión final del modelo: ${(accuracyValue * 100).toFixed(2)}%`);
+                        
+                        // Guardar el modelo
+                        saveModel();
                     }
                 }
             });
             
-            // Evaluar el modelo
-            const evalResult = model.evaluate(featuresTensor, labelsTensor);
-            const accuracyValue = await evalResult[1].data();
-            accuracy.textContent = `${(accuracyValue[0] * 100).toFixed(1)}%`;
-            
-            addLog(`Precisión final del modelo: ${(accuracyValue[0] * 100).toFixed(2)}%`);
-            
             // Liberar tensores de memoria
             featuresTensor.dispose();
             labelsTensor.dispose();
-            evalResult[0].dispose();
-            evalResult[1].dispose();
         }
         
-        async function predictFrauds() {
-            predictBtn.disabled = true;
-            resultsContainer.innerHTML = '<p>Realizando predicciones...</p>';
-            
-            // Convertir datos a tensores y remodelar para CNN 1D
-            const featuresTensor = tf.tensor2d(trainingData.features)
-                .reshape([-1, ...trainingData.inputShape]);
-            
-            // Realizar predicciones
-            const predictions = model.predict(featuresTensor);
-            const predictionValues = await predictions.data();
-            
-            // Procesar resultados
-            resultsContainer.innerHTML = '';
-            let fraudCount = 0;
-            let correctPredictions = 0;
-            
-            for (let i = 0; i < parsedData.length; i++) {
-                const row = parsedData[i];
-                const prediction = predictionValues[i];
-                const isFraud = prediction > 0.5;
-                const actualLabel = row.Type === 'Bot' ? 1 : 0;
-                const isCorrect = (isFraud && actualLabel === 1) || (!isFraud && actualLabel === 0);
+        async function saveModel() {
+            try {
+                // Guardar el modelo en localStorage
+                const modelInfo = await model.save('localstorage://fraud-detection-model');
+                addLog('Modelo guardado correctamente.');
                 
-                if (isFraud) fraudCount++;
-                if (isCorrect) correctPredictions++;
-                
-                const resultItem = document.createElement('div');
-                resultItem.className = `result-item ${isFraud ? 'fraud' : 'legit'}`;
-                
-                resultItem.innerHTML = `
-                    <strong>Actor ${row.Actor}</strong> - 
-                    Probabilidad de fraude: ${(prediction * 100).toFixed(2)}% - 
-                    <strong>${isFraud ? 'POSIBLE FRAUDE' : 'Legítimo'}</strong>
-                    ${row.Type ? ` (Etiqueta real: ${row.Type})` : ''}
-                    ${isCorrect ? ' ✓' : ' ✗'}
-                `;
-                
-                resultsContainer.appendChild(resultItem);
+                // Mostrar sección para ir a la página de resultados
+                nextPageSection.style.display = 'block';
+            } catch (error) {
+                addLog('Error al guardar el modelo: ' + error);
             }
-            
-            // Actualizar estadísticas
-            accuracy.textContent = `${(correctPredictions / parsedData.length * 100).toFixed(1)}%`;
-            
-            addLog(`Predicciones completadas. Se detectaron ${fraudCount} posibles fraudes.`);
-            addLog(`Precisión en predicciones: ${(correctPredictions / parsedData.length * 100).toFixed(2)}%`);
-            
-            // Liberar tensores de memoria
-            featuresTensor.dispose();
-            predictions.dispose();
+        }
+        
+        function goToResultsPage() {
+            // Redirigir a la página de resultados
+            window.location.href = 'results.html';
         }
         
         function addLog(message) {
