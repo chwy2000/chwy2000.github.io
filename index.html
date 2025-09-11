@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detección de Fraudes - TensorFlow.js</title>
+    <title>Detección de Fraudes - CNN 1D con TensorFlow.js</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
     <style>
@@ -192,6 +192,15 @@
             border-bottom: 1px solid #eee;
         }
         
+        .model-architecture {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
@@ -209,8 +218,8 @@
 </head>
 <body>
     <header>
-        <h1>Detección de Fraudes con TensorFlow.js</h1>
-        <p class="description">Carga un archivo CSV con datos de comportamiento de jugadores y detecta posibles fraudes usando machine learning en el navegador.</p>
+        <h1>Detección de Fraudes con CNN 1D</h1>
+        <p class="description">Carga un archivo CSV con datos de comportamiento de jugadores y detecta posibles fraudes usando una red neuronal convolucional 1D.</p>
     </header>
     
     <div class="container">
@@ -241,6 +250,17 @@
                     <p id="accuracy">0%</p>
                 </div>
             </div>
+            
+            <div class="model-architecture">
+                <h3>Arquitectura del Modelo (CNN 1D):</h3>
+                <p>Input: [secuencia_de_características]</p>
+                <p>↳ Conv1D (filters: 64, kernelSize: 3)</p>
+                <p>↳ MaxPooling1D (poolSize: 2)</p>
+                <p>↳ Conv1D (filters: 32, kernelSize: 3)</p>
+                <p>↳ GlobalAveragePooling1D</p>
+                <p>↳ Dense (units: 16, activation: 'relu')</p>
+                <p>↳ Dense (units: 1, activation: 'sigmoid')</p>
+            </div>
         </div>
         
         <div class="panel">
@@ -261,6 +281,7 @@
         let model;
         let trainingData = {};
         let parsedData = [];
+        let featureColumns = [];
         
         // Elementos DOM
         const fileUpload = document.getElementById('fileUpload');
@@ -321,14 +342,16 @@
                     parsedData = results.data;
                     recordsCount.textContent = parsedData.length;
                     
-                    // Contar características (excluyendo la columna Actor y Type)
+                    // Identificar columnas de características (excluyendo la columna Actor y Type)
                     const firstRow = parsedData[0];
-                    const featureColumns = Object.keys(firstRow).filter(key => 
-                        key !== 'Actor' && key !== 'Type' && key !== 'A_Acc'
+                    featureColumns = Object.keys(firstRow).filter(key => 
+                        key !== 'Actor' && key !== 'Type' && key !== 'A_Acc' && typeof firstRow[key] === 'number'
                     );
+                    
                     featuresCount.textContent = featureColumns.length;
                     
                     addLog(`Datos cargados: ${parsedData.length} registros con ${featureColumns.length} características.`);
+                    addLog(`Características: ${featureColumns.join(', ')}`);
                     
                     // Preparar datos para entrenamiento
                     prepareTrainingData();
@@ -346,14 +369,8 @@
             const labels = [];
             
             parsedData.forEach(row => {
-                // Excluir columnas no numéricas y la columna objetivo
-                const featureValues = [];
-                for (const key in row) {
-                    if (key !== 'Actor' && key !== 'Type' && key !== 'A_Acc' && typeof row[key] === 'number') {
-                        featureValues.push(row[key]);
-                    }
-                }
-                
+                // Obtener valores de características en el orden correcto
+                const featureValues = featureColumns.map(col => row[col]);
                 features.push(featureValues);
                 
                 // Convertir la etiqueta a numérica (Bot -> 1, Human -> 0)
@@ -362,23 +379,48 @@
             
             trainingData = {
                 features: features,
-                labels: labels
+                labels: labels,
+                inputShape: [featureColumns.length, 1]  // Forma para CNN 1D: [longitud_secuencia, canales]
             };
             
-            addLog('Datos preparados para entrenamiento.');
+            addLog('Datos preparados para entrenamiento con CNN 1D.');
+            addLog(`Forma de entrada: [${trainingData.inputShape[0]}, ${trainingData.inputShape[1]}]`);
         }
         
         function createModel() {
             const model = tf.sequential();
             
-            // Capa de entrada
-            model.add(tf.layers.dense({
-                inputShape: [trainingData.features[0].length],
-                units: 32,
-                activation: 'relu'
+            // Capa de entrada - remodelar para CNN 1D
+            model.add(tf.layers.inputLayer({
+                inputShape: trainingData.inputShape
             }));
             
-            // Capa oculta
+            // Primera capa convolucional 1D
+            model.add(tf.layers.conv1d({
+                filters: 64,
+                kernelSize: 3,
+                activation: 'relu',
+                padding: 'same'
+            }));
+            
+            // Capa de agrupación máxima
+            model.add(tf.layers.maxPooling1d({
+                poolSize: 2,
+                padding: 'same'
+            }));
+            
+            // Segunda capa convolucional 1D
+            model.add(tf.layers.conv1d({
+                filters: 32,
+                kernelSize: 3,
+                activation: 'relu',
+                padding: 'same'
+            }));
+            
+            // Agrupación global para convertir la salida 3D en 2D
+            model.add(tf.layers.globalAveragePooling1d());
+            
+            // Capa completamente conectada
             model.add(tf.layers.dense({
                 units: 16,
                 activation: 'relu'
@@ -392,7 +434,7 @@
             
             // Compilar el modelo
             model.compile({
-                optimizer: tf.train.adam(0.01),
+                optimizer: tf.train.adam(0.001),
                 loss: 'binaryCrossentropy',
                 metrics: ['accuracy']
             });
@@ -402,25 +444,26 @@
         
         async function trainModel() {
             trainBtn.disabled = true;
-            addLog('Comenzando entrenamiento del modelo...');
+            addLog('Comenzando entrenamiento del modelo CNN 1D...');
             
             // Crear el modelo
             model = createModel();
             
-            // Convertir datos a tensores
-            const featuresTensor = tf.tensor2d(trainingData.features);
+            // Convertir datos a tensores y remodelar para CNN 1D
+            const featuresTensor = tf.tensor2d(trainingData.features)
+                .reshape([-1, ...trainingData.inputShape]);
             const labelsTensor = tf.tensor1d(trainingData.labels);
             
             // Entrenar el modelo
             await model.fit(featuresTensor, labelsTensor, {
-                epochs: 50,
+                epochs: 30,
                 batchSize: 32,
                 validationSplit: 0.2,
                 callbacks: {
                     onEpochEnd: (epoch, logs) => {
-                        const progress = ((epoch + 1) / 50) * 100;
+                        const progress = ((epoch + 1) / 30) * 100;
                         progressBar.style.width = `${progress}%`;
-                        addLog(`Época ${epoch + 1}/50 - Pérdida: ${logs.loss.toFixed(4)} - Precisión: ${(logs.acc * 100).toFixed(2)}%`);
+                        addLog(`Época ${epoch + 1}/30 - Pérdida: ${logs.loss.toFixed(4)} - Precisión: ${(logs.acc * 100).toFixed(2)}%`);
                     },
                     onTrainEnd: () => {
                         addLog('Entrenamiento completado.');
@@ -429,17 +472,27 @@
                 }
             });
             
+            // Evaluar el modelo
+            const evalResult = model.evaluate(featuresTensor, labelsTensor);
+            const accuracyValue = await evalResult[1].data();
+            accuracy.textContent = `${(accuracyValue[0] * 100).toFixed(1)}%`;
+            
+            addLog(`Precisión final del modelo: ${(accuracyValue[0] * 100).toFixed(2)}%`);
+            
             // Liberar tensores de memoria
             featuresTensor.dispose();
             labelsTensor.dispose();
+            evalResult[0].dispose();
+            evalResult[1].dispose();
         }
         
         async function predictFrauds() {
             predictBtn.disabled = true;
             resultsContainer.innerHTML = '<p>Realizando predicciones...</p>';
             
-            // Convertir datos a tensores
-            const featuresTensor = tf.tensor2d(trainingData.features);
+            // Convertir datos a tensores y remodelar para CNN 1D
+            const featuresTensor = tf.tensor2d(trainingData.features)
+                .reshape([-1, ...trainingData.inputShape]);
             
             // Realizar predicciones
             const predictions = model.predict(featuresTensor);
@@ -448,13 +501,17 @@
             // Procesar resultados
             resultsContainer.innerHTML = '';
             let fraudCount = 0;
+            let correctPredictions = 0;
             
             for (let i = 0; i < parsedData.length; i++) {
                 const row = parsedData[i];
                 const prediction = predictionValues[i];
                 const isFraud = prediction > 0.5;
+                const actualLabel = row.Type === 'Bot' ? 1 : 0;
+                const isCorrect = (isFraud && actualLabel === 1) || (!isFraud && actualLabel === 0);
                 
                 if (isFraud) fraudCount++;
+                if (isCorrect) correctPredictions++;
                 
                 const resultItem = document.createElement('div');
                 resultItem.className = `result-item ${isFraud ? 'fraud' : 'legit'}`;
@@ -464,15 +521,17 @@
                     Probabilidad de fraude: ${(prediction * 100).toFixed(2)}% - 
                     <strong>${isFraud ? 'POSIBLE FRAUDE' : 'Legítimo'}</strong>
                     ${row.Type ? ` (Etiqueta real: ${row.Type})` : ''}
+                    ${isCorrect ? ' ✓' : ' ✗'}
                 `;
                 
                 resultsContainer.appendChild(resultItem);
             }
             
             // Actualizar estadísticas
-            accuracy.textContent = `${((parsedData.length - fraudCount) / parsedData.length * 100).toFixed(1)}%`;
+            accuracy.textContent = `${(correctPredictions / parsedData.length * 100).toFixed(1)}%`;
             
             addLog(`Predicciones completadas. Se detectaron ${fraudCount} posibles fraudes.`);
+            addLog(`Precisión en predicciones: ${(correctPredictions / parsedData.length * 100).toFixed(2)}%`);
             
             // Liberar tensores de memoria
             featuresTensor.dispose();
@@ -488,7 +547,7 @@
         }
         
         // Mensaje inicial
-        addLog('Sistema de detección de fraudes listo. Cargue un archivo CSV para comenzar.');
+        addLog('Sistema de detección de fraudes con CNN 1D listo. Cargue un archivo CSV para comenzar.');
     </script>
 </body>
 </html>
