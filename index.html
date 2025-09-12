@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detección de Fraudes - CNN 1D con TensorFlow.js</title>
+    <title>Detección de Fraudes Red Neuronal Convolucional de una dimensión con TensorFlow.js.</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
     <style>
@@ -456,7 +456,7 @@
             
             // Entrenar el modelo
             await model.fit(featuresTensor, labelsTensor, {
-                epochs: 60,
+                epochs: 30,
                 batchSize: 32,
                 validationSplit: 0.2,
                 callbacks: {
