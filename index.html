@@ -456,7 +456,7 @@
             
             // Entrenar el modelo
             await model.fit(featuresTensor, labelsTensor, {
-                epochs: 30,
+                epochs: 60,
                 batchSize: 32,
                 validationSplit: 0.2,
                 callbacks: {
